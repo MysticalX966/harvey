@@ -17,7 +17,7 @@ function applyTheme(mode) {
   if (mode === 'auto') root.removeAttribute('data-theme');
   else root.setAttribute('data-theme', mode);
   const btn = document.getElementById('theme-btn');
-  if (btn) btn.textContent = mode;
+  if (btn) btn.textContent = t(mode);
 }
 
 function cycleTheme() {
@@ -95,7 +95,7 @@ const STATUS = {
 function statusMeta(status) {
   const key = String(status || '').toLowerCase().replace(/[^a-z0-9]+/g, '_');
   const hit = STATUS[key];
-  if (hit) return { label: hit[0], tone: hit[1] };
+  if (hit) return { label: t(hit[0]), tone: hit[1] };
   const label = String(status || 'unknown').replace(/_/g, ' ');
   return { label: label.charAt(0).toUpperCase() + label.slice(1), tone: 'idle' };
 }
@@ -110,7 +110,7 @@ function formatDate(d) {
   try {
     const dt = new Date(d);
     if (isNaN(dt)) return escHtml(d);
-    return dt.toLocaleString('en-US', {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+    return dt.toLocaleString(locale(), {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
   } catch { return escHtml(d); }
 }
 
@@ -126,6 +126,8 @@ function offlineState() {
 }
 
 async function api(path, opts) {
+  opts = Object.assign({}, opts);
+  opts.headers = Object.assign({'X-Harvey-Lang': LANG}, opts.headers);
   try {
     const r = await fetch(path, opts);
     if (!r.ok) return null;
@@ -1339,8 +1341,20 @@ async function loadActivity() {
   el.innerHTML = html + '</div>';
 }
 
+// Switching language re-renders in place: static markup swaps immediately,
+// everything built from API data is simply loaded again.
+function changeLanguage(lang) {
+  setLanguage(lang);
+  let theme = 'auto';
+  try { theme = localStorage.getItem('harvey-theme') || 'auto'; } catch { /* ignore */ }
+  applyTheme(THEMES.includes(theme) ? theme : 'auto');
+  loadHarveyStatus();
+  loadCurrentTab();
+}
+
 // ── Init & live refresh ──
 
+applyStaticTranslations();
 loadToday();
 loadSetupStatus();
 loadRuns();

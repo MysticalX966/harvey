@@ -199,6 +199,17 @@
 <div id="settings" class="section">
   <div class="section-head"><h2>Settings</h2><p>Credentials are stored locally in <span style="font-family:var(--mono);font-size:12px">.env</span> — never sent anywhere except the services themselves.</p></div>
   <div class="card">
+    <h2>Language</h2>
+    <p class="lede">The language of this dashboard. Stored in this browser only.</p>
+    <div class="form-group" style="max-width:240px;margin-bottom:0">
+      <label class="form-label" for="lang-select">Dashboard language</label>
+      <select class="form-input" id="lang-select" onchange="changeLanguage(this.value)">
+        <option value="en">English</option>
+        <option value="de">Deutsch</option>
+      </select>
+    </div>
+  </div>
+  <div class="card">
     <h2>Email Provider</h2>
     <p class="lede">How Harvey sends and reads replies. Active provider: <b id="active-provider">…</b> — change it by setting <span style="font-family:var(--mono);font-size:12px">channels.email.provider</span> in <span style="font-family:var(--mono);font-size:12px">harvey.yaml</span> to <span style="font-family:var(--mono);font-size:12px">gmail</span>, <span style="font-family:var(--mono);font-size:12px">smtp</span>, or <span style="font-family:var(--mono);font-size:12px">instantly</span>.</p>
 
@@ -415,6 +426,7 @@
 
 </main>
 
+<script src="/static/i18n.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
