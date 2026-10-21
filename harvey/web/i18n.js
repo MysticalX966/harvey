@@ -96,5 +96,5 @@ function setLanguage(lang) {
   LANG = LANGUAGES[saved] ? saved : 'en';
   _dict = _loadDict(LANG);
   _buildCanon();
-  if (typeof document !== 'undefined') document.documentElement.lang = LANG;
+  if (typeof document !== 'undefined' && document.documentElement) document.documentElement.lang = LANG;
 })();

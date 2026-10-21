@@ -3,10 +3,33 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
 <title>Harvey — Command Deck</title>
+<!-- First, so the token leaves the address bar before anything else runs. -->
+<script src="/static/auth.js"></script>
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
+
+<!-- Shown whenever the API refuses this tab (no token, a wrong one, or none on the server). -->
+<div id="lock-screen"
+     style="display:none;position:fixed;inset:0;z-index:1000;background:var(--bg);align-items:center;justify-content:center;padding:24px">
+  <div class="card" style="max-width:520px;width:100%">
+    <h2 data-i18n>Dashboard locked</h2>
+    <p class="lede" id="lock-reason" role="alert"></p>
+    <p class="lede" data-i18n>Open the link that <span style="font-family:var(--mono);font-size:12px">harvey dashboard</span>
+      printed in your terminal, or run <span style="font-family:var(--mono);font-size:12px">harvey dashboard --url</span>
+      to print it again. You can also paste the token from
+      <span style="font-family:var(--mono);font-size:12px">data/dashboard-token</span>:</p>
+    <form onsubmit="unlockWithToken(event)" class="form-row" style="align-items:flex-end">
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label" for="lock-token" data-i18n>Dashboard token</label>
+        <input type="password" class="form-input" id="lock-token" autocomplete="off" spellcheck="false">
+      </div>
+      <button class="btn btn-primary" type="submit" data-i18n>Unlock</button>
+    </form>
+  </div>
+</div>
 
 <header>
   <div class="brand">
@@ -53,6 +76,7 @@
   </div>
   <div class="today-grid">
     <div class="today-main">
+      <div id="live-status" style="margin-bottom:28px"></div>
       <div id="today-queue"></div>
       <div class="rail-block" style="margin-top:34px">
         <div class="subhead" data-i18n>Recent activity</div>
@@ -146,8 +170,8 @@
   <div class="section-head" style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
     <div><h2 data-i18n>Contacts</h2><p data-i18n>People Harvey has found and verified.</p></div>
     <div style="display:flex;gap:8px;flex-shrink:0">
-      <a class="btn btn-secondary btn-sm" href="/api/export/prospects.csv" download data-i18n>Export deliverable CSV</a>
-      <a class="btn btn-secondary btn-sm" href="/api/export/prospects.csv?all=true" download data-i18n>Export all</a>
+      <button class="btn btn-secondary btn-sm" onclick="downloadCsv('/api/export/prospects.csv', 'prospects.csv', this)" data-i18n>Export deliverable CSV</button>
+      <button class="btn btn-secondary btn-sm" onclick="downloadCsv('/api/export/prospects.csv?all=true', 'prospects-all.csv', this)" data-i18n>Export all</button>
     </div>
   </div>
   <div id="prospects-table"></div>
@@ -366,7 +390,7 @@
       <summary data-i18n>Instantly API Key (required)</summary>
       <div class="faq-body">
         <p data-i18n>Instantly is the email platform Harvey uses to send campaigns.</p>
-        <p>1. Sign up at <a href="https://instantly.ai" target="_blank" rel="noopener">instantly.ai</a> (you need the Growth plan for API access)</p>
+        <p><span data-i18n>1. Sign up at</span> <a href="https://instantly.ai" target="_blank" rel="noopener">instantly.ai</a> <span data-i18n>(you need the Growth plan for API access)</span></p>
         <p data-i18n>2. Go to Settings &gt; Integrations</p>
         <p data-i18n>3. Copy your API key</p>
         <p data-i18n>4. Paste it in the Settings tab here</p>
@@ -385,7 +409,7 @@
       <summary data-i18n>Cloudflare Browser Rendering (optional)</summary>
       <div class="faq-body">
         <p data-i18n>This is only used during product training (when Harvey crawls your website to learn about your product). It handles JavaScript-heavy websites that a basic crawler can't read.</p>
-        <p data-i18n>1. Sign up at <a href="https://dash.cloudflare.com" target="_blank" rel="noopener">Cloudflare</a> (paid Workers plan, ~$5/month)</p>
+        <p><span data-i18n>1. Sign up at</span> <a href="https://dash.cloudflare.com" target="_blank" rel="noopener">Cloudflare</a> <span data-i18n>(paid Workers plan, ~$5/month)</span></p>
         <p data-i18n>2. Go to Workers &amp; Pages &gt; Browser Rendering</p>
         <p data-i18n>3. Create an API token with Browser Rendering Edit permissions</p>
         <p data-i18n>4. Enter your Account ID and API Token in the Settings tab</p>
