@@ -235,7 +235,7 @@
   </div>
   <div class="card">
     <h2 data-i18n>Email Provider</h2>
-    <p class="lede"><span data-i18n>How Harvey sends and reads replies. Active provider:</span> <b id="active-provider">…</b> <span data-i18n>— change it by setting <span style="font-family:var(--mono);font-size:12px">channels.email.provider</span> in <span style="font-family:var(--mono);font-size:12px">harvey.yaml</span> to <span style="font-family:var(--mono);font-size:12px">gmail</span>, <span style="font-family:var(--mono);font-size:12px">smtp</span>, or <span style="font-family:var(--mono);font-size:12px">instantly</span>.</span></p>
+    <p class="lede"><span data-i18n>How Harvey sends and reads replies. Active provider:</span> <b id="active-provider">…</b> <span data-i18n>— change it by setting <span style="font-family:var(--mono);font-size:12px">channels.email.provider</span> in <span style="font-family:var(--mono);font-size:12px">harvey.yaml</span> to <span style="font-family:var(--mono);font-size:12px">gmail</span>, <span style="font-family:var(--mono);font-size:12px">microsoft</span>, <span style="font-family:var(--mono);font-size:12px">smtp</span>, or <span style="font-family:var(--mono);font-size:12px">instantly</span>.</span></p>
 
     <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px">
       <div style="font-weight:650;margin-bottom:4px"><span data-i18n>Gmail / Google Workspace</span> <span class="optional-tag" data-i18n>recommended</span> <span id="gmail-status" class="email-tag"></span></div>
@@ -264,7 +264,36 @@
         <div class="form-row"><div class="form-group" style="margin-bottom:0">
           <input type="password" class="form-input" id="smtp-pass" placeholder="Enter password / app password" autocomplete="off" data-i18n-placeholder></div>
           <button class="btn btn-secondary btn-sm" onclick="toggleVisibility('smtp-pass')" data-i18n>Show</button></div></div>
+      <details style="margin-bottom:12px">
+        <summary style="cursor:pointer;font-size:13px;color:var(--text-2)" data-i18n>Reading replies from a different IMAP server or login</summary>
+        <div class="form-row" style="margin-top:10px">
+          <div class="form-group"><label class="form-label" for="imap-host" data-i18n>IMAP host</label>
+            <input type="text" class="form-input" id="imap-host" placeholder="Same as SMTP host" data-i18n-placeholder autocomplete="off"></div>
+          <div class="form-group" style="max-width:120px"><label class="form-label" for="imap-port" data-i18n>Port</label>
+            <input type="text" class="form-input" id="imap-port" placeholder="993" autocomplete="off"></div>
+        </div>
+        <div class="form-group"><label class="form-label" for="imap-user" data-i18n>IMAP username</label>
+          <input type="text" class="form-input" id="imap-user" placeholder="Same as SMTP username" data-i18n-placeholder autocomplete="off"></div>
+        <div class="form-group"><label class="form-label" for="imap-pass" data-i18n>IMAP password</label>
+          <div class="form-row"><div class="form-group" style="margin-bottom:0">
+            <input type="password" class="form-input" id="imap-pass" placeholder="Same as SMTP password" data-i18n-placeholder autocomplete="off" oninput="if (this.value) document.getElementById('imap-same-pass').checked = false"></div>
+            <button class="btn btn-secondary btn-sm" onclick="toggleVisibility('imap-pass')" data-i18n>Show</button></div></div>
+        <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="imap-same-pass"> <span data-i18n>Use the SMTP password for IMAP</span></label>
+      </details>
       <button class="btn btn-primary btn-sm" onclick="saveSmtp()" data-i18n>Save SMTP</button>
+    </div>
+
+    <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px">
+      <div style="font-weight:650;margin-bottom:4px"><span data-i18n>Microsoft 365 / Outlook</span> <span id="m365-status" class="email-tag"></span></div>
+      <p class="lede" style="margin-top:4px" data-i18n>Microsoft turned off password sign-in for IMAP, so Outlook mailboxes connect with OAuth. In <a href="https://entra.microsoft.com" target="_blank" rel="noopener noreferrer">Entra</a> → App registrations, register an app for your organization only, add the redirect URI <span style="font-family:var(--mono);font-size:12px">http://localhost:8766</span> as "Public client/native", paste both IDs here, save, then run <span style="font-family:var(--mono);font-size:12px">harvey microsoft auth</span> in your terminal. No client secret is needed.</p>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label" for="m365-client" data-i18n>Application (client) ID</label>
+          <input type="text" class="form-input" id="m365-client" placeholder="00000000-0000-0000-0000-000000000000" autocomplete="off"></div>
+        <div class="form-group"><label class="form-label" for="m365-tenant" data-i18n>Directory (tenant) ID</label>
+          <input type="text" class="form-input" id="m365-tenant" placeholder="00000000-0000-0000-0000-000000000000" autocomplete="off"></div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="saveMicrosoft()" data-i18n>Save Microsoft 365</button>
     </div>
 
     <div style="border:1px solid var(--border);border-radius:10px;padding:16px">
