@@ -216,6 +216,7 @@ def cmd_status(args):
         print(f"  Claude calls today:   {by_provider.get('claude', summary['usage_today'])}")
         print(f"  Codex calls today:    {by_provider.get('codex', 0)}")
         from harvey.config import compliance_notice, load_config, sending_notice
+        loaded = None
         try:
             loaded = load_config()
             notice = sending_notice(loaded)
@@ -233,6 +234,22 @@ def cmd_status(args):
         if notice:
             print("  Sending:              HELD")
             print(textwrap.fill(notice, width=72, initial_indent="                        ",
+                                subsequent_indent="                        "))
+        hold = await state.current_sends_held()
+        if hold:
+            from harvey.sending_mode import held_message
+            waiting = len(await state.get_outbox(status="approved", limit=500))
+            _, detail = held_message(hold, waiting=waiting)
+            print("  Sending:              NOT SENDING (couldn't read your inbox)")
+            print(textwrap.fill(detail, width=72, initial_indent="                        ",
+                                subsequent_indent="                        "))
+        from harvey.integrations.precleared import current_hold, hold_message
+        precleared_hold = await current_hold(state, loaded)
+        if precleared_hold:
+            message = hold_message(precleared_hold)
+            print(f"  Precleared:           HOLDING COLD EMAIL since {precleared_hold.get('since', '?')}")
+            print(textwrap.fill(f"{message['title']}. {message['detail']}", width=72,
+                                initial_indent="                        ",
                                 subsequent_indent="                        "))
         if address_notice:
             print("  Postal address:       MISSING")
@@ -463,7 +480,12 @@ def cmd_outbox(args):
 
         if args.approve_all:
             n = await state.approve_outbox()
-            print(f"\n  Approved {n} email(s). They'll send on schedule.\n")
+            print(f"\n  Approved {n} email(s). They'll send on schedule.")
+            held = await state.count_held_for_review()
+            if held:
+                print(f"  {held} email(s) Harvey held for review were left out: read each one,")
+                print("  then approve it with --approve <id>.")
+            print()
             return
         if args.approve:
             n = await state.approve_outbox(args.approve)
@@ -517,8 +539,13 @@ def cmd_profile(args):
 
         print(f"\n  {pending} companies need profiling. Reading up to "
               f"{args.limit}...\n")
+        try:
+            from harvey.config import load_config
+            config = load_config()
+        except Exception:
+            config = None   # still profiles; no role is singled out as hiring intent
         companies, observations, _ = await run_profile_stage(
-            state, limit=args.limit, stale_days=args.stale_days)
+            state, limit=args.limit, stale_days=args.stale_days, config=config)
         print(f"  Read {companies} sites → {observations} observations (free)")
         print("\n  See what turned up: harvey dashboard → Signals\n")
 
@@ -530,7 +557,7 @@ def cmd_discover(args):
     from harvey.state import StateManager
     from harvey.config import load_config
     from harvey.collectors.discover import (
-        PROVIDERS, build_queries, provider_menu, run_discovery,
+        PROVIDERS, build_queries, preset_problem, provider_menu, run_discovery,
     )
 
     async def _discover():
@@ -561,8 +588,13 @@ def cmd_discover(args):
 
         # Semicolons, not commas: "Denver, CO" is one city, not two.
         cities = [c.strip() for c in args.city.split(";") if c.strip()] or None
+        preset = getattr(args, "preset", "") or ""
+        problem = preset_problem(preset, args.provider, config=config)
+        if problem:
+            print(f"\n  {problem}\n")
+            sys.exit(2)
         queries = build_queries(config, cities=cities,
-                                depth=args.depth, limit=args.limit)
+                                depth=args.depth, limit=args.limit, preset=preset)
 
         report = await run_discovery(state, config, args.provider, queries,
                                      max_spend=args.max_spend, dry_run=True)
@@ -860,8 +892,8 @@ def main():
         help="Comma-separated statuses to include (default: verified,risky)",
     )
     sub.add_argument("--min-score", type=int, default=0, help="Minimum ICP score")
-    sub.add_argument("--status", default="", help="Comma-separated pipeline statuses (e.g. new,queued)")
-    sub.add_argument("--all", action="store_true", help="Export everything, no filters")
+    sub.add_argument("--status", default="", help="Comma-separated pipeline statuses (e.g. new,queued); opted-out contacts stay excluded")
+    sub.add_argument("--all", action="store_true", help="Export the raw list without filters, including opted-out contacts (not for outreach)")
     sub.set_defaults(func=cmd_export)
 
     # harvey gmail auth|test
@@ -900,6 +932,15 @@ def main():
                      help="Max records per query (default: 100)")
     sub.add_argument("--max-spend", type=float, default=1.0,
                      help="Hard cap in dollars (default: 1.00)")
+    sub.add_argument("--preset", default="", choices=["", "yc", "hiring", "accelerator", "funding"],
+                     help="A built-in search instead of your ICP's industries "
+                          "(each needs serper or dataforseo_serp). "
+                          "yc: startups whose own site says they're YC-backed; "
+                          "hiring: companies whose own careers pages list one of "
+                          "your hiring_signals roles (else ICP titles); "
+                          "accelerator: ones backed by Techstars, Antler, EF, SPC, 500 Global, "
+                          "Neo, AI Grant, a16z speedrun or Plug and Play; "
+                          "funding: companies announcing a raise on their own site in the last 18 months")
     sub.add_argument("--no-profile", action="store_true",
                      help="Don't profile what was found (profiling is free)")
     sub.set_defaults(func=cmd_discover)
