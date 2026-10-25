@@ -5,6 +5,7 @@ import ipaddress
 import json
 import logging
 import os
+import shutil
 import signal
 import stat
 import subprocess
@@ -27,6 +28,7 @@ logger = logging.getLogger("harvey.dashboard")
 from harvey import dashboard_auth as auth  # noqa: E402
 from harvey.i18n import tr, request_lang  # noqa: E402
 from harvey.paths import PROJECT_ROOT  # noqa: E402
+from harvey.pidfile import LOCK_FILE, loop_lock_held, pid_alive  # noqa: E402
 from harvey.textio import read_user_text  # noqa: E402
 DB_PATH = PROJECT_ROOT / "data" / "harvey.db"
 ENV_FILE = PROJECT_ROOT / ".env"
@@ -165,10 +167,17 @@ def _check_harvey_pid() -> int | None:
     if PID_FILE.exists():
         try:
             pid = int(PID_FILE.read_text(encoding="utf-8").strip())
-            os.kill(pid, 0)  # Check if process exists
+        except (OSError, ValueError):
+            pid = None
+        # pid_alive, never os.kill(pid, 0): on Windows that terminates the loop.
+        # And only while a loop holds the lock: after a crash or a reboot the
+        # PID can belong to an unrelated program, which Stop must not signal.
+        if pid is not None and pid_alive(pid) and loop_lock_held(LOCK_FILE):
             return pid
-        except (ValueError, ProcessLookupError, PermissionError):
+        try:
             PID_FILE.unlink(missing_ok=True)
+        except OSError:
+            pass
     return None
 
 
@@ -528,19 +537,32 @@ async def start_harvey(request: Request):
 
     if _check_harvey_pid():
         return {"success": False, "message": tr(lang, "Harvey is already running.")}
+    from harvey.main import _needs_setup
+    if _needs_setup():
+        return {"success": False,
+                "message": tr(lang, "Harvey isn't set up yet. Run `harvey setup` in a terminal first.")}
 
     # Ensure data dir exists
     (PROJECT_ROOT / "data").mkdir(parents=True, exist_ok=True)
+
+    # The native Claude CLI installer puts claude in ~/.local/bin without
+    # always adding it to PATH; the heartbeat can't think without it.
+    env = os.environ.copy()
+    local_bin = Path.home() / ".local" / "bin"
+    if not shutil.which("claude") and local_bin.is_dir():
+        env["PATH"] = str(local_bin) + os.pathsep + env.get("PATH", "")
 
     try:
         log_handle = open(LOG_FILE, "a", encoding="utf-8")
         try:
             _harvey_process = subprocess.Popen(
-                [sys.executable, "-m", "harvey"],
+                [sys.executable, "-m", "harvey", "run"],
                 cwd=str(PROJECT_ROOT),
+                stdin=subprocess.DEVNULL,
                 stdout=log_handle,
                 stderr=log_handle,
                 start_new_session=True,
+                env=env,
             )
         finally:
             # Child holds its own copies of the fds; don't leak ours.
@@ -549,13 +571,9 @@ async def start_harvey(request: Request):
         logger.warning("Failed to start Harvey: %s", e)
         return {"success": False, "message": tr(lang, "Failed to start Harvey: {error}", error=e)}
     _harvey_started_at = datetime.now()
-
-    # Write PID file
-    try:
-        PID_FILE.write_text(str(_harvey_process.pid), encoding="utf-8")
-    except OSError as e:
-        logger.warning("Could not write PID file: %s", e)
-
+    # The loop writes its own PID file once it holds the loop lock. Writing
+    # the child's PID here would overwrite a running loop's record if this
+    # child then finds the lock taken and exits.
     return {"success": True, "pid": _harvey_process.pid}
 
 
@@ -569,23 +587,37 @@ async def stop_harvey(request: Request):
     if not pid:
         return {"success": False, "message": tr(lang, "Harvey is not running.")}
 
+    own = _harvey_process if _harvey_process and _harvey_process.pid == pid else None
+
+    def alive() -> bool:
+        # Our own child is reaped by poll(); left unreaped it is a zombie,
+        # which still answers signal 0.
+        if own is not None:
+            return own.poll() is None
+        return pid_alive(pid)
+
     try:
         os.kill(pid, signal.SIGTERM)
         # Wait briefly for graceful shutdown
         for _ in range(10):
-            try:
-                os.kill(pid, 0)
-                await asyncio.sleep(0.5)
-            except ProcessLookupError:
+            if not alive():
                 break
+            await asyncio.sleep(0.5)
         else:
-            # Force kill if still running
+            # Force kill if still running (Windows has no SIGKILL; SIGTERM
+            # there is already TerminateProcess)
             try:
-                os.kill(pid, signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
+                os.kill(pid, getattr(signal, "SIGKILL", signal.SIGTERM))
+            except OSError:
                 pass
-    except (ProcessLookupError, PermissionError):
-        pass
+            await asyncio.sleep(0.5)
+    except OSError as e:
+        logger.warning("Couldn't signal Harvey (pid %s): %s", pid, e)
+
+    if alive():
+        # Started by another user, or from an elevated terminal on Windows.
+        return {"success": False,
+                "message": tr(lang, "Couldn't stop Harvey (pid {pid}). Stop it where it was started.", pid=pid)}
 
     _harvey_process = None
     _harvey_started_at = None
@@ -1876,7 +1908,7 @@ async def get_live_status(request: Request):
     profile_eta = next((r["eta_min"] for r in running if r["stage"] == "profile"), None)
     read_detail = tr(lang, "{done} of {total} read", done=profiled, total=with_site)
     if reading and profile_eta is not None:
-        read_detail += " · " + _eta_text(profile_eta)
+        read_detail += " · " + _eta_text(profile_eta, lang)
     if no_site:
         read_detail += tr(lang, " · {n} have no website (skipped)", n=no_site)
 
